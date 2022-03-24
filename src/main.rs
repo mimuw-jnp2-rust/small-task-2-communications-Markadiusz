@@ -21,7 +21,11 @@ enum MessageType {
 
 impl MessageType {
     fn header(&self) -> &'static str {
-        todo!()
+        match self {
+            MessageType::Handshake => "[HANDSHAKE]",
+            MessageType::Post => "[POST]",
+            MessageType::GetCount => "[GET COUNT]",
+        }
     }
 }
 
@@ -69,7 +73,11 @@ impl Client {
     // Method should return an error when a connection already exists.
     // The client should send a handshake to the server.
     fn open(&mut self, addr: &str, server: Server) -> CommsResult<()> {
-        todo!()
+        match self.connections.get(addr) {
+            None => Ok(()),
+            Some(Connection::Closed) => Ok(()),
+            _ => Err(CommsError::ConnectionExists((&addr).to_string())),
+        }
     }
 
     // Sends the provided message to the server at the given `addr`.
@@ -77,21 +85,38 @@ impl Client {
     // responds with a ServerLimitReached error, its corresponding connection
     // should be closed.
     fn send(&mut self, addr: &str, msg: Message) -> CommsResult<Response> {
-        // server.receive(msg)
-        todo!()
+        match self.connections.get(addr) {
+            None => Err(CommsError::ConnectionNotFound((&addr).to_string())),
+            Some(Connection::Closed) => Err(CommsError::ConnectionClosed((&addr).to_string())),
+            Some(Connection::Open(server)) => {
+                // let x = &server.receive(msg);
+                Err(CommsError::ConnectionClosed((&addr).to_string())) // tymcz
+            },
+        }
     }
 
     // Returns whether the connection to `addr` exists and has
     // the `Open` status.
     #[allow(dead_code)]
     fn is_open(&self, addr: &str) -> bool {
-        todo!()
+        match self.connections.get(addr) {
+            None => false,
+            Some(Connection::Closed) => false,
+            _ => true,
+        }
     }
 
     // Returns the number of closed connections
     #[allow(dead_code)]
     fn count_closed(&self) -> usize {
-        todo!()
+        let mut res = 0;
+        for (key, value) in &self.connections {
+            res += match value {
+                    Connection::Closed => 1,
+                    _ => 0,
+                };
+        }
+        res
     }
 }
 
@@ -113,7 +138,12 @@ struct Server {
 
 impl Server {
     fn new(name: String, limit: u32) -> Server {
-        todo!()
+        Server {
+            name,
+            post_count: 0,
+            limit,
+            connected_client: None
+        }
     }
 
     // Consumes the message.
@@ -123,8 +153,29 @@ impl Server {
     // with the GetCount response containing the number of received POST requests.
     fn receive(&mut self, msg: Message) -> CommsResult<Response> {
         eprintln!("{} received:\n{}", self.name, msg.content());
-
-        todo!()
+        match msg {
+            Message {
+                msg_type: MessageType::Handshake,
+                ..
+            } => match &self.connected_client {
+                None => Ok(Response::HandshakeReceived),
+                _ => Err(CommsError::UnexpectedHandshake(String::from(&self.name))),
+            },
+            Message {
+                msg_type: MessageType::Post,
+                ..
+            } => if self.post_count < self.limit {
+                self.post_count += 1;
+                Ok(Response::PostReceived)
+            }
+            else {
+                Err(CommsError::ServerLimitReached(String::from(&self.name)))
+            },
+            Message {
+                msg_type: MessageType::GetCount,
+                ..
+            } => Ok(Response::GetCount(self.post_count)),
+        }
     }
 }
 
