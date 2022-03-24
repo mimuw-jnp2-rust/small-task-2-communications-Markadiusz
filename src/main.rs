@@ -158,7 +158,10 @@ impl Server {
                 msg_type: MessageType::Handshake,
                 ..
             } => match &self.connected_client {
-                None => Ok(Response::HandshakeReceived),
+                None => {
+                    self.connected_client = Some(msg.load);
+                    Ok(Response::HandshakeReceived)
+                },
                 _ => Err(CommsError::UnexpectedHandshake(String::from(&self.name))),
             },
             Message {
