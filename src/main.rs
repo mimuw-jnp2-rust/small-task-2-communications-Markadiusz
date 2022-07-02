@@ -76,13 +76,16 @@ impl Client {
         if let Some(Connection::Open(..)) = self.connections.get(addr) {
             Err(CommsError::ConnectionExists(addr.to_string()))
         } else {
-            let mut server = server;
-            server.receive(Message {
-                msg_type: MessageType::Handshake,
-                load: self.ip.clone(),
-            })?;
             self.connections
                 .insert(addr.to_string(), Connection::Open(server));
+            self.send(
+                addr,
+                Message {
+                    msg_type: MessageType::Handshake,
+                    load: self.ip.clone(),
+                },
+            )
+            .unwrap();
             Ok(())
         }
     }
